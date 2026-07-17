@@ -1,0 +1,75 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Donker "gym"-thema */
+  --color-ink-900: #0e0f13; /* app-achtergrond */
+  --color-ink-800: #15171d; /* kaarten */
+  --color-ink-700: #1d2028; /* kaart-hover / inputs */
+  --color-ink-600: #2a2e39; /* randen */
+  --color-ink-500: #3a3f4d; /* onvoltooide set-circle */
+  --color-ink-400: #6b7280; /* gedempte tekst */
+  --color-ink-100: #e7e9ee; /* primaire tekst */
+
+  --color-volt-400: #d7f76e;
+  --color-volt-500: #c8f04c; /* accent: voltooide sets, knoppen, timer */
+  --color-volt-600: #a9cf34;
+
+  --color-danger-500: #f0554c;
+
+  --font-display: 'Space Grotesk', 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --radius-card: 1rem;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-ink-900);
+    /* Voorkomt dat dubbeltik op set-circles inzoomt op mobiel */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-ink-900 text-ink-100 font-sans antialiased;
+    min-height: 100dvh;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight;
+  }
+}
+
+/* Eigen klassen als @utility: alleen zo zijn ze in Tailwind v4 te @apply'en. */
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3
+         font-display text-sm font-semibold tracking-wide
+         transition active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100;
+}
+
+@utility btn-primary {
+  @apply btn bg-volt-500 text-ink-900 hover:bg-volt-400;
+}
+
+@utility btn-ghost {
+  @apply btn border border-ink-600 text-ink-100 hover:bg-ink-700;
+}
+
+@utility btn-danger {
+  @apply btn border border-danger-500/40 text-danger-500 hover:bg-danger-500/10;
+}
+
+@utility card {
+  @apply rounded-card border border-ink-600/60 bg-ink-800;
+}
+
+@utility input {
+  @apply w-full rounded-lg border border-ink-600 bg-ink-700 px-3 py-2 text-ink-100
+         placeholder:text-ink-400 focus:border-volt-500 focus:ring-0 focus:outline-none;
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
