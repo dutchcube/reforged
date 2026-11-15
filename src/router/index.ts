@@ -1,10 +1,46 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** Toegankelijk zonder inloggen. */
+    public?: boolean
+    /** Toon de tabbalk onderin. */
+    tabs?: boolean
+  }
+}
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
+    // De vijf tabs
+    { path: '/', name: 'home', component: () => import('@/views/HomeView.vue'), meta: { tabs: true } },
+    {
+      path: '/programs',
+      name: 'programs',
+      component: () => import('@/views/ProgramsView.vue'),
+      meta: { tabs: true },
+    },
+    {
+      path: '/history',
+      name: 'history',
+      component: () => import('@/views/HistoryView.vue'),
+      meta: { tabs: true },
+    },
+    {
+      path: '/progress',
+      name: 'progress',
+      component: () => import('@/views/ProgressView.vue'),
+      meta: { tabs: true },
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('@/views/SettingsView.vue'),
+      meta: { tabs: true },
+    },
+
+    // Schermvullend, zonder tabbalk
     {
       path: '/login',
       name: 'login',
@@ -15,6 +51,7 @@ const router = createRouter({
     { path: '/edit/:workoutId?', name: 'edit', component: () => import('@/views/WorkoutEditView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
+  scrollBehavior: () => ({ top: 0 }),
 })
 
 router.beforeEach(async (to) => {

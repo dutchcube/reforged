@@ -6,6 +6,10 @@ export interface Exercise {
   sets: number
   reps: number
   weight: number | null
+  /** Stap waarmee het gewicht stijgt na een geslaagde sessie (kg). */
+  increment: number
+  /** Aantal mislukte sessies op rij op het huidige gewicht. */
+  fail_count: number
   position: number
 }
 
@@ -27,6 +31,7 @@ export interface SessionExercise {
   target_reps: number
   weight: number | null
   reps_done: number[]
+  position: number
 }
 
 export interface Session {
@@ -36,14 +41,20 @@ export interface Session {
   workout_name: string
   started_at: string
   completed_at: string
+  body_weight: number | null
+  note: string | null
   session_exercises?: SessionExercise[]
 }
 
-/** Nieuwe/bewerkte oefening in WorkoutEditView; `id` ontbreekt zolang hij nog niet bestaat. */
+/**
+ * Nieuwe/bewerkte oefening in WorkoutEditView. `id` ontbreekt zolang hij nog
+ * niet bestaat; `increment` leeg (null) betekent: kies de standaardstap.
+ */
 export interface ExerciseDraft {
   id?: string
   name: string
   sets: number
   reps: number
   weight: number | null
+  increment: number | null
 }

@@ -30,7 +30,8 @@ onMounted(async () => {
       name: e.name,
       sets: e.sets,
       reps: e.reps,
-      weight: e.weight,
+      weight: e.weight === null ? null : Number(e.weight),
+      increment: Number(e.increment),
     }))
   }
   if (!exercises.value.length) addExercise()
@@ -38,7 +39,13 @@ onMounted(async () => {
 })
 
 function addExercise() {
-  exercises.value.push({ name: '', sets: 5, reps: 5, weight: null })
+  // increment leeg = standaardstap (deadlift 5 kg, de rest 2,5 kg)
+  exercises.value.push({ name: '', sets: 5, reps: 5, weight: null, increment: null })
+}
+
+/** Een leeggemaakt getalveld levert '' of NaN op; dat moet NULL worden, geen 0. */
+function numberOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
 }
 
 function move(index: number, delta: number) {
@@ -60,19 +67,19 @@ async function save() {
     name: e.name.trim(),
     sets: Math.min(20, Math.max(1, Math.round(e.sets || 1))),
     reps: Math.min(100, Math.max(1, Math.round(e.reps || 1))),
-    // Leeg invoerveld levert '' of NaN op; dat moet NULL worden, geen 0.
-    weight: e.weight === null || Number.isNaN(e.weight) ? null : Number(e.weight),
+    weight: numberOrNull(e.weight),
+    increment: numberOrNull(e.increment),
   }))
   const id = await store.saveWorkout(workoutId, name.value.trim(), cleaned)
   saving.value = false
-  if (id) router.replace({ name: 'home' })
+  if (id) router.replace({ name: 'programs' })
 }
 
 async function remove() {
   if (!workoutId) return
   if (!confirm(`"${name.value}" verwijderen? Je historie blijft bewaard.`)) return
   const ok = await store.deleteWorkout(workoutId)
-  if (ok) router.replace({ name: 'home' })
+  if (ok) router.replace({ name: 'programs' })
 }
 </script>
 
@@ -129,6 +136,11 @@ async function remove() {
       <button type="button" class="btn-ghost mt-3 w-full" @click="addExercise">
         + Oefening toevoegen
       </button>
+
+      <p class="mt-3 text-xs leading-relaxed text-ink-400">
+        Stap = zoveel kg erbij na een sessie waarin je alle sets haalt. Laat het veld leeg voor de
+        standaard, of vul 0 in om het gewicht gelijk te houden.
+      </p>
 
       <p v-if="store.error" class="mt-4 rounded-lg bg-danger-500/10 p-3 text-sm text-danger-500">
         {{ store.error }}

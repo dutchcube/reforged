@@ -8,6 +8,8 @@ export const useAuthStore = defineStore('auth', () => {
   /** false zolang de eerste getSession() nog loopt — de router-guard wacht hierop. */
   const ready = ref(false)
   const error = ref<string | null>(null)
+  /** Mededeling die geen fout is, bijv. "bevestig je e-mailadres". */
+  const notice = ref<string | null>(null)
 
   async function init() {
     if (ready.value) return
@@ -23,6 +25,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function signInWithGoogle() {
     error.value = null
+    notice.value = null
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin },
@@ -30,10 +33,45 @@ export const useAuthStore = defineStore('auth', () => {
     if (err) error.value = err.message
   }
 
+  async function signInWithPassword(email: string, password: string): Promise<boolean> {
+    error.value = null
+    notice.value = null
+    const { data, error: err } = await supabase.auth.signInWithPassword({ email, password })
+    if (err) {
+      error.value =
+        err.message === 'Invalid login credentials' ? 'E-mailadres of wachtwoord klopt niet.' : err.message
+      return false
+    }
+    user.value = data.user
+    return true
+  }
+
+  /** Maakt een account aan. Geeft true terug als je direct bent ingelogd. */
+  async function signUp(email: string, password: string): Promise<boolean> {
+    error.value = null
+    notice.value = null
+    const { data, error: err } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: window.location.origin },
+    })
+    if (err) {
+      error.value = err.message
+      return false
+    }
+    if (!data.session) {
+      // Supabase vraagt standaard om bevestiging per e-mail.
+      notice.value = 'Account aangemaakt. Open de link in de bevestigingsmail om in te loggen.'
+      return false
+    }
+    user.value = data.user
+    return true
+  }
+
   async function signOut() {
     await supabase.auth.signOut()
     user.value = null
   }
 
-  return { user, ready, error, init, signInWithGoogle, signOut }
+  return { user, ready, error, notice, init, signInWithGoogle, signInWithPassword, signUp, signOut }
 })

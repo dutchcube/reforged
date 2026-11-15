@@ -1,12 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { supabase } from '@/lib/supabase'
-import type { ExerciseDraft, Session, Workout } from '@/lib/types'
+import { defaultIncrement } from '@/lib/progression'
+import type { ExerciseDraft, Workout } from '@/lib/types'
 
 export const useWorkoutsStore = defineStore('workouts', () => {
   const workouts = ref<Workout[]>([])
-  const recentSessions = ref<Session[]>([])
   const loading = ref(false)
+  /** True zodra de lijst minstens één keer is opgehaald. */
+  const loaded = ref(false)
   const error = ref<string | null>(null)
 
   async function fetchWorkouts() {
@@ -19,20 +21,11 @@ export const useWorkoutsStore = defineStore('workouts', () => {
       .order('position', { referencedTable: 'exercises', ascending: true })
 
     if (err) error.value = err.message
-    else workouts.value = (data as Workout[]) ?? []
+    else {
+      workouts.value = (data as Workout[]) ?? []
+      loaded.value = true
+    }
     loading.value = false
-  }
-
-  async function fetchRecentSessions(limit = 5) {
-    const { data, error: err } = await supabase
-      .from('sessions')
-      .select('*, session_exercises(*)')
-      .order('completed_at', { ascending: false })
-      .order('position', { referencedTable: 'session_exercises', ascending: true })
-      .limit(limit)
-
-    if (err) error.value = err.message
-    else recentSessions.value = (data as Session[]) ?? []
   }
 
   function getWorkout(id: string) {
@@ -49,19 +42,18 @@ export const useWorkoutsStore = defineStore('workouts', () => {
       .select('*, exercises(*)')
       .eq('id', id)
       .order('position', { referencedTable: 'exercises', ascending: true })
-      .single()
+      .maybeSingle()
 
     if (err) {
       error.value = err.message
       return null
     }
-    return data as Workout
+    return (data as Workout | null) ?? null
   }
 
   /**
-   * Slaat naam + oefeningen op. Oefeningen worden vervangen (delete + insert)
-   * in plaats van gediffed: eenvoudiger, en de sessie-historie hangt aan
-   * snapshots, dus er gaat niets verloren.
+   * Slaat naam + oefeningen op in één transactie (RPC save_workout).
+   * Bestaande oefeningen houden hun id, zodat de progressie-teller blijft staan.
    */
   async function saveWorkout(
     id: string | null,
@@ -69,51 +61,27 @@ export const useWorkoutsStore = defineStore('workouts', () => {
     exercises: ExerciseDraft[],
   ): Promise<string | null> {
     error.value = null
-    let workoutId = id
 
-    if (workoutId) {
-      const { error: err } = await supabase.from('workouts').update({ name }).eq('id', workoutId)
-      if (err) {
-        error.value = err.message
-        return null
-      }
-      const { error: delErr } = await supabase.from('exercises').delete().eq('workout_id', workoutId)
-      if (delErr) {
-        error.value = delErr.message
-        return null
-      }
-    } else {
-      const position = workouts.value.length
-      const { data, error: err } = await supabase
-        .from('workouts')
-        .insert({ name, position })
-        .select('id')
-        .single()
-      if (err || !data) {
-        error.value = err?.message ?? 'Opslaan mislukt'
-        return null
-      }
-      workoutId = data.id as string
-    }
-
-    if (exercises.length) {
-      const rows = exercises.map((e, i) => ({
-        workout_id: workoutId,
+    const { data, error: err } = await supabase.rpc('save_workout', {
+      p_id: id,
+      p_name: name,
+      p_exercises: exercises.map((e) => ({
+        id: e.id ?? null,
         name: e.name,
         sets: e.sets,
         reps: e.reps,
         weight: e.weight,
-        position: i,
-      }))
-      const { error: err } = await supabase.from('exercises').insert(rows)
-      if (err) {
-        error.value = err.message
-        return null
-      }
+        increment: e.increment ?? defaultIncrement(e.name),
+      })),
+    })
+
+    if (err) {
+      error.value = err.message
+      return null
     }
 
     await fetchWorkouts()
-    return workoutId
+    return data as string
   }
 
   async function deleteWorkout(id: string) {
@@ -129,11 +97,10 @@ export const useWorkoutsStore = defineStore('workouts', () => {
 
   return {
     workouts,
-    recentSessions,
     loading,
+    loaded,
     error,
     fetchWorkouts,
-    fetchRecentSessions,
     fetchWorkout,
     getWorkout,
     saveWorkout,

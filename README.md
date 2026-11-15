@@ -1,16 +1,32 @@
-# Reps — workout tracker
+# Reforged — workout tracker
 
-Mobiel-gerichte workout-app geïnspireerd op StrongLifts 5x5. Stel workouts samen
-(oefeningen met sets × reps en optioneel gewicht), voer ze uit door sets af te tikken
-via set-circles, en zie op het startscherm je laatst voltooide sessies terug
-(`Squat: 5/5/5/5/5 · 100kg`).
+Mobiel-gerichte workout-app geïnspireerd op StrongLifts 5×5. Stel workouts samen, tik je sets
+af via set-circles en laat de app het gewicht voor de volgende keer uitrekenen.
+
+Reforged voegt drie eerdere pogingen samen: de basis komt uit `workout-app` (Vue 3 + Supabase),
+de schermindeling met tabbalk en historie uit `Easylifts`.
+
+## Wat de app doet
+
+- **Start** — toont de workout die nu aan de beurt is (A → B → A …), met geschatte eindtijd.
+- **Programma's** — workouts maken, bewerken, ordenen en verwijderen.
+- **Uitvoeren** — set-circles, voortgangsbalk, rusttimer die vanzelf start, gewicht bijstellen,
+  tab met opwarmsets, lichaamsgewicht en notitie.
+- **Historie** — alle voltooide sessies, met duur en notitie; per sessie te verwijderen.
+- **Voortgang** — grafiek van het gewicht per oefening.
+- **Instellingen** — standaard rusttijd, timer automatisch starten, gewicht van de stang.
+- **Progressie** — alle sets gehaald: gewicht + stap (standaard 2,5 kg, deadlift 5 kg).
+  Drie sessies op rij niet gehaald: 10% terug.
+- **PWA** — installeerbaar op het beginscherm; een lopende sessie overleeft een refresh.
 
 ## Stack
 
 Vue 3 (`<script setup>` + TypeScript) · Vite · Pinia · Vue Router · Tailwind CSS v4 ·
-Supabase (Postgres + Auth met Google OAuth + Row Level Security).
+Supabase (Postgres + Auth + Row Level Security) · Vitest · vite-plugin-pwa.
 
 ## Aan de slag
+
+Je hebt [Node.js](https://nodejs.org) 22 of nieuwer nodig.
 
 ```bash
 npm install
@@ -21,6 +37,7 @@ Voor inloggen en opslaan is een Supabase-project nodig — zie **[SETUP.md](SETU
 Zonder `.env.local` start de app wel op en toont hij een waarschuwingsbalk.
 
 ```bash
+npm test         # unit tests (Vitest)
 npm run build    # typecheck (vue-tsc) + productiebuild naar dist/
 ```
 
@@ -30,33 +47,38 @@ Per circle, met `target` = geplande reps (bijv. 5):
 
 | Toestand | Tik | Resultaat |
 |---|---|---|
-| grijs, toont `5` | 1e tik | accentkleur, `5` — set volledig gehaald |
+| grijs, toont `5` | 1e tik | accentkleur, `5` — set gehaald; de rusttimer start |
 | `5` | tik | `4` — minder reps gehaald |
 | `4` → `1` | tik | telkens één minder |
 | `0` | tik | terug naar grijs (`5`) |
-
-De logica staat als pure functie in [`src/lib/setCircle.ts`](src/lib/setCircle.ts) (`nextSetValue`),
-zodat er later eenvoudig Vitest-tests aan toegevoegd kunnen worden.
 
 ## Structuur
 
 ```
 src/
-├─ lib/          supabase-client, types, set-circle-logica, formatters
+├─ lib/          pure logica met tests: setCircle · progression · warmup · schedule ·
+│                progress · format — plus supabase-client en types
+├─ stores/       auth · workouts · session (actieve sessie) · history · restTimer · settings
 ├─ router/       routes + auth-guard
-├─ stores/       auth · workouts (CRUD) · session (actieve uitvoering)
-├─ views/        Login · Home · WorkoutRun · WorkoutEdit
-├─ components/   SetCircle · ExerciseRunRow · ExerciseEditRow · RestTimer · WorkoutCard
+├─ views/        Home · Programs · History · Progress · Settings · WorkoutRun · WorkoutEdit · Login
+├─ components/   TabBar · SetCircle · ExerciseRunRow · ExerciseEditRow · RestTimer ·
+│                WorkoutCard · SessionCard
 └─ assets/       main.css — Tailwind-import + @theme design tokens
-supabase/migrations/001_init.sql   schema + RLS-policies
+supabase/migrations/
+├─ 001_init.sql       tabellen + RLS-policies
+└─ 002_reforged.sql   progressie-kolommen + RPC's save_workout en finish_session
 ```
 
 ## Ontwerpkeuzes
 
 - **Sessie leeft lokaal.** Tijdens een workout staat de voortgang in een Pinia-store,
   gespiegeld in `localStorage`. Een haperende verbinding in de sportschool of een refresh
-  wist je sets niet; pas bij **Finish** gaat de sessie naar Supabase.
-- **Historie via snapshots.** `sessions`/`session_exercises` bewaren naam, targets en gewicht
+  wist je sets niet; pas bij **Afronden** gaat de sessie naar Supabase. Mislukt dat, dan
+  blijft de sessie staan en kun je het opnieuw proberen.
+- **Opslaan is atomair.** Een workout opslaan (`save_workout`) en een sessie afronden
+  (`finish_session`) lopen elk via één database-functie, dus in één transactie.
+- **Progressie wordt in de app berekend** (`src/lib/progression.ts`, met tests) en in dezelfde
+  transactie als de sessie weggeschreven.
+- **Historie via snapshots.** `sessions`/`session_exercises` bewaren naam, doelen en gewicht
   als kopie, dus het aanpassen of verwijderen van een workout laat je historie intact.
-- **Oefeningen worden vervangen bij opslaan** (delete + insert) in plaats van gediffed —
-  eenvoudiger, en dankzij de snapshots verliest de historie niets.
+- **Instellingen per toestel.** Rusttijd en stanggewicht staan in `localStorage`.
