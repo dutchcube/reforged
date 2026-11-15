@@ -14,6 +14,8 @@ vi.stubGlobal('localStorage', {
 })
 
 const { useSessionStore } = await import('./session')
+const { useHistoryStore } = await import('./history')
+const { useWorkoutsStore } = await import('./workouts')
 
 const exercise = (id: string, name: string, sets: number, weight: number | null, extra = {}) => ({
   id,
@@ -91,7 +93,7 @@ describe('session store', () => {
     session.tapSet(2, 0)
     session.active!.note = 'Ging lekker'
 
-    expect(await session.finish()).toBe(true)
+    expect(await session.finish()).toBe('saved')
     expect(session.active).toBeNull()
 
     expect(rpc).toHaveBeenCalledTimes(1)
@@ -147,15 +149,75 @@ describe('session store', () => {
     ])
   })
 
-  it('houdt de sessie vast als opslaan mislukt', async () => {
-    rpc.mockResolvedValue({ data: null, error: { message: 'Failed to fetch' } })
+  it('houdt de sessie vast als opslaan mislukt door een fout van de server', async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: 'permission denied' } })
     const session = useSessionStore()
     session.start(workout)
     session.tapSet(0, 0)
 
-    expect(await session.finish()).toBe(false)
+    expect(await session.finish()).toBe('failed')
     expect(session.active?.exercises[0].values[0]).toBe(5)
-    expect(session.error).toContain('Failed to fetch')
+    expect(session.error).toContain('permission denied')
+    expect(session.pendingCount).toBe(0)
+  })
+
+  it('zet de sessie zonder verbinding in de wachtrij en verstuurt hem later', async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: 'TypeError: Failed to fetch' } })
+    const session = useSessionStore()
+    const history = useHistoryStore()
+    session.start(workout, 80)
+    session.tapSet(0, 0)
+    session.tapSet(0, 1)
+
+    expect(await session.finish()).toBe('queued')
+    expect(session.active).toBeNull()
+    expect(session.error).toBeNull()
+    expect(session.pendingCount).toBe(1)
+    expect(session.lastSummary).toMatchObject({ queued: true, volume: 1000 })
+    expect(session.lastSummary?.exercises[0]).toMatchObject({ outcome: 'up', nextWeight: 102.5 })
+    // de sessie staat alvast in de historie en overleeft een herstart van de app
+    expect(history.sessions).toHaveLength(1)
+    expect(JSON.parse(storage.get('reforged:pending-sessions')!)).toHaveLength(1)
+
+    // nog steeds offline: er verandert niets
+    expect(await session.flushPending()).toBe(0)
+    expect(session.pendingCount).toBe(1)
+
+    // weer online: dezelfde sessie (zelfde id en eindtijd) gaat alsnog naar de server
+    rpc.mockResolvedValue({ data: 's1', error: null })
+    expect(await session.flushPending()).toBe(1)
+    expect(session.pendingCount).toBe(0)
+    expect(history.sessions).toHaveLength(0)
+
+    const first = rpc.mock.calls[0][1].p_session
+    const last = rpc.mock.calls[rpc.mock.calls.length - 1][1].p_session
+    expect(last).toEqual(first)
+    expect(first.id).toMatch(/^[0-9a-f-]{36}$/)
+    expect(first.completed_at >= first.started_at).toBe(true)
+  })
+
+  it('past offline de progressie alvast toe op de bewaarde workouts', async () => {
+    const workouts = useWorkoutsStore()
+    workouts.workouts = [structuredClone(workout)]
+    rpc.mockResolvedValue({ data: null, error: { message: 'Failed to fetch' } })
+    const session = useSessionStore()
+    session.start(workouts.workouts[0])
+    session.tapSet(0, 0)
+    session.tapSet(0, 1)
+
+    await session.finish()
+    expect(workouts.workouts[0].exercises?.[0].weight).toBe(102.5)
+    expect(workouts.workouts[0].exercises?.[3].weight).toBe(120) // overgeslagen: ongewijzigd
+  })
+
+  it('ziet een dubbel verstuurde sessie als opgeslagen', async () => {
+    rpc.mockResolvedValue({ data: null, error: { code: '23505', message: 'duplicate key' } })
+    const session = useSessionStore()
+    session.start(workout)
+    session.tapSet(0, 0)
+
+    expect(await session.finish()).toBe('saved')
+    expect(session.pendingCount).toBe(0)
   })
 
   it('stuurt een leeggemaakt lichaamsgewicht als null', async () => {

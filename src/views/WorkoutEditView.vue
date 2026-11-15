@@ -139,7 +139,8 @@ async function remove() {
 
       <p class="mt-3 text-xs leading-relaxed text-ink-400">
         Stap = zoveel kg erbij na een sessie waarin je alle sets haalt. Laat het veld leeg voor de
-        standaard, of vul 0 in om het gewicht gelijk te houden.
+        standaard. Vul 0 in voor een accessoire-oefening (bijv. curls 3×10): het gewicht verandert
+        dan nooit vanzelf en er volgt ook geen deload.
       </p>
 
       <p v-if="store.error" class="mt-4 rounded-lg bg-danger-500/10 p-3 text-sm text-danger-500">

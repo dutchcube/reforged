@@ -3,7 +3,10 @@ import { computed, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import ExerciseRunRow from '@/components/ExerciseRunRow.vue'
 import RestTimer from '@/components/RestTimer.vue'
-import { formatWeight } from '@/lib/format'
+import { formatKg, formatReps, formatWeight } from '@/lib/format'
+import { formatPlates, platesPerSide } from '@/lib/plates'
+import { findNewRecords, type NewRecord } from '@/lib/stats'
+import { useWakeLock } from '@/lib/wakeLock'
 import { warmupSets } from '@/lib/warmup'
 import { useHistoryStore } from '@/stores/history'
 import { useRestTimerStore } from '@/stores/restTimer'
@@ -25,6 +28,12 @@ const notFound = ref(false)
 /** Zet Finish/verlaten door: onderdrukt de "weet je het zeker"-guard. */
 const leaving = ref(false)
 const tab = ref<'workout' | 'warmup'>('workout')
+/** True zodra de sessie is afgerond: dan tonen we de samenvatting. */
+const done = ref(false)
+const newRecords = ref<NewRecord[]>([])
+
+// Scherm aan houden zolang de workout loopt (als de telefoon dat ondersteunt).
+useWakeLock(() => settings.keepAwake && session.isRunning)
 
 const active = computed(() => session.active)
 const progress = computed(() =>
@@ -36,9 +45,18 @@ const warmups = computed(() =>
   (active.value?.exercises ?? []).map((ex) => ({
     name: ex.name,
     weight: ex.weight,
-    sets: warmupSets(ex.weight, settings.barWeight),
+    sets: warmupSets(ex.weight, settings.barWeight).map((s) => ({
+      ...s,
+      plates: settings.showPlates ? platesText(s.weight) : '',
+    })),
   })),
 )
+
+/** "per kant 10 + 2,5", of leeg als het de lege stang is. */
+function platesText(weight: number): string {
+  const load = platesPerSide(weight, settings.barWeight)
+  return load && load.perSide.length ? `per kant ${formatPlates(load)}` : ''
+}
 
 onMounted(async () => {
   // Loopt deze sessie al (refresh, terug uit Home)? Dan direct verder, ook offline.
@@ -84,18 +102,40 @@ function tap(exerciseIndex: number, setIndex: number) {
 }
 
 async function finish() {
+  if (!session.active) return
   if (session.completedSets < session.totalSets) {
     const open = session.totalSets - session.completedSets
     const label = open === 1 ? '1 set is' : `${open} sets zijn`
     if (!confirm(`${label} nog niet afgetikt en tellen als 0 reps. Toch afronden?`)) return
   }
-  const ok = await session.finish()
-  if (!ok) return
+
+  // Records bepalen we vóór het opslaan: daarna staat deze sessie zelf in de historie.
+  const broken = findNewRecords(
+    history.sessions,
+    session.active.exercises.map((ex) => ({
+      name: ex.name,
+      weight: ex.weight,
+      repsDone: ex.values.map((v) => v ?? 0),
+    })),
+  )
+
+  const result = await session.finish()
+  if (result === 'failed') return
+
+  newRecords.value = broken
+  done.value = true
   leaving.value = true
   timer.stop()
+  window.scrollTo({ top: 0 })
   // De progressie heeft de gewichten aangepast: lijst en historie verversen.
-  await Promise.all([workouts.fetchWorkouts(), history.fetchSessions()])
-  router.replace({ name: 'home' })
+  if (result === 'saved') void Promise.all([workouts.fetchWorkouts(), history.fetchSessions()])
+}
+
+function nextLabel(ex: { outcome: string; nextWeight: number | null }): string {
+  if (ex.outcome === 'up') return `↑ volgende keer ${formatWeight(ex.nextWeight)}`
+  if (ex.outcome === 'deload') return `↓ deload naar ${formatWeight(ex.nextWeight)}`
+  if (ex.outcome === 'hold') return `blijft ${formatWeight(ex.nextWeight)}`
+  return ''
 }
 
 function quit() {
@@ -113,7 +153,77 @@ onBeforeRouteLeave(() => {
 </script>
 
 <template>
-  <main class="px-4 pt-4 pb-44">
+  <!-- Samenvatting na het afronden -->
+  <main v-if="done && session.lastSummary" class="px-4 pt-8 pb-12">
+    <header class="text-center">
+      <p class="font-display text-sm font-semibold tracking-wide text-volt-500 uppercase">Klaar</p>
+      <h1 class="mt-1 text-2xl font-bold">{{ session.lastSummary.workoutName }}</h1>
+      <p class="tabular mt-1 text-sm text-ink-400">
+        {{ session.lastSummary.minutes }} min
+        <template v-if="session.lastSummary.volume > 0">
+          · {{ formatKg(session.lastSummary.volume) }} verplaatst
+        </template>
+      </p>
+    </header>
+
+    <p
+      v-if="session.lastSummary.queued"
+      class="mt-5 rounded-card border border-ink-600/60 bg-ink-800 p-4 text-sm"
+      role="status"
+    >
+      <span class="font-semibold">Geen verbinding.</span>
+      Je sessie staat veilig op dit toestel en wordt vanzelf verstuurd zodra je weer online bent.
+    </p>
+
+    <section
+      v-if="newRecords.length"
+      class="mt-5 rounded-card border border-volt-500/50 bg-volt-500/10 p-4"
+    >
+      <h2 class="text-base font-semibold">
+        🏆 {{ newRecords.length === 1 ? 'Nieuw record' : `${newRecords.length} nieuwe records` }}
+      </h2>
+      <ul class="mt-2 space-y-1.5 text-sm">
+        <li v-for="r in newRecords" :key="r.name" class="flex items-baseline justify-between gap-3">
+          <span class="truncate">
+            {{ r.name }}
+            <span class="text-xs text-ink-400">
+              {{ r.kind === 'weight' ? 'zwaarste gewicht' : 'geschatte 1RM' }}
+            </span>
+          </span>
+          <span class="tabular shrink-0">
+            <span class="font-semibold">{{ formatWeight(r.value) }}</span>
+            <span class="ml-1.5 text-xs text-ink-400">was {{ formatWeight(r.previous) }}</span>
+          </span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="card mt-5 p-4">
+      <ul class="space-y-3">
+        <li v-for="(ex, i) in session.lastSummary.exercises" :key="i" class="text-sm">
+          <div class="flex items-baseline justify-between gap-3">
+            <span class="truncate font-semibold">{{ ex.name }}</span>
+            <span class="tabular shrink-0">
+              {{ formatReps(ex.repsDone, ex.targetReps) }}
+              <span v-if="ex.weight !== null" class="text-ink-400">· {{ formatWeight(ex.weight) }}</span>
+            </span>
+          </div>
+          <p v-if="nextLabel(ex)" class="tabular mt-0.5 text-xs text-ink-400">{{ nextLabel(ex) }}</p>
+        </li>
+      </ul>
+    </section>
+
+    <RouterLink :to="{ name: 'home' }" replace class="btn-primary mt-6 w-full">Naar Start</RouterLink>
+    <RouterLink
+      :to="{ name: 'progress' }"
+      replace
+      class="mt-3 block text-center text-xs text-ink-400 underline-offset-2 hover:text-ink-100 hover:underline"
+    >
+      Bekijk je voortgang
+    </RouterLink>
+  </main>
+
+  <main v-else class="px-4 pt-4 pb-44">
     <header class="mb-4 flex items-center justify-between gap-3">
       <button type="button" class="text-sm text-ink-400 hover:text-ink-100" @click="quit">
         ✕ Stop
@@ -188,6 +298,7 @@ onBeforeRouteLeave(() => {
           :target-reps="ex.target_reps"
           :weight="ex.weight"
           :values="ex.values"
+          :bar-weight="settings.showPlates ? settings.barWeight : null"
           @tap="(setIndex) => tap(i, setIndex)"
           @adjust="(delta) => session.adjustWeight(i, delta)"
         />
@@ -238,7 +349,10 @@ onBeforeRouteLeave(() => {
               class="tabular flex justify-between gap-3 text-sm"
             >
               <span class="text-ink-400">{{ s.sets }}×{{ s.reps }}</span>
-              <span>{{ formatWeight(s.weight) }}</span>
+              <span class="text-right">
+                {{ formatWeight(s.weight) }}
+                <span v-if="s.plates" class="block text-xs text-ink-400">{{ s.plates }}</span>
+              </span>
             </li>
           </ul>
           <p v-else class="text-sm text-ink-400">

@@ -14,10 +14,17 @@ const history = useHistoryStore()
 const session = useSessionStore()
 const settings = useSettingsStore()
 
-onMounted(() => {
+onMounted(async () => {
+  // Eerst de offline afgeronde sessies versturen; pas daarna klopt wat de server teruggeeft.
+  await session.flushPending()
   store.fetchWorkouts()
   history.fetchSessions()
 })
+
+async function sync() {
+  const sent = await session.flushPending()
+  if (sent) await Promise.all([store.fetchWorkouts(), history.fetchSessions()])
+}
 
 /** De workout die nu aan de beurt is (A -> B -> A ...). */
 const upNext = computed(() => nextWorkout(store.workouts, history.lastWorkoutId))
@@ -48,6 +55,34 @@ const firstLoad = computed(
       class="mb-4 rounded-lg bg-danger-500/10 p-3 text-sm text-danger-500"
     >
       {{ store.error || history.error }}
+    </p>
+
+    <!-- Offline afgeronde sessies die nog verstuurd moeten worden -->
+    <div
+      v-if="session.pendingCount"
+      class="mb-4 flex items-center justify-between gap-3 rounded-card border border-ink-600/60 bg-ink-800 p-4"
+      role="status"
+    >
+      <div class="min-w-0">
+        <p class="text-sm font-semibold">
+          {{ session.pendingCount }}
+          {{ session.pendingCount === 1 ? 'sessie wacht' : 'sessies wachten' }} op verbinding
+        </p>
+        <p class="text-xs text-ink-400">
+          {{ session.error ?? 'Wordt vanzelf verstuurd zodra je online bent.' }}
+        </p>
+      </div>
+      <button
+        type="button"
+        class="btn-ghost shrink-0 px-3 py-2 text-xs"
+        :disabled="session.syncing"
+        @click="sync"
+      >
+        {{ session.syncing ? 'Bezig…' : 'Nu versturen' }}
+      </button>
+    </div>
+    <p v-else-if="store.offline || history.offline" class="mb-4 text-xs text-ink-400" role="status">
+      Je bent offline. Je ziet de laatst bekende gegevens; trainen kan gewoon.
     </p>
 
     <!-- Lopende sessie hervatten -->

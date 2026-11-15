@@ -1,9 +1,30 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import TabBar from '@/components/TabBar.vue'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { useAuthStore } from '@/stores/auth'
+import { useHistoryStore } from '@/stores/history'
+import { useSessionStore } from '@/stores/session'
+import { useWorkoutsStore } from '@/stores/workouts'
 
 const route = useRoute()
+const auth = useAuthStore()
+const session = useSessionStore()
+const workouts = useWorkoutsStore()
+const history = useHistoryStore()
+
+/** Weer online: verstuur wat offline is afgerond en haal de nieuwe stand op. */
+async function onOnline() {
+  if (!auth.user) return
+  const sent = await session.flushPending()
+  if (sent || workouts.offline || history.offline) {
+    await Promise.all([workouts.fetchWorkouts(), history.fetchSessions()])
+  }
+}
+
+onMounted(() => window.addEventListener('online', onOnline))
+onBeforeUnmount(() => window.removeEventListener('online', onOnline))
 </script>
 
 <template>

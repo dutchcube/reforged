@@ -6,12 +6,28 @@ interface Settings {
   restSeconds: number
   /** Start de rusttimer vanzelf zodra je een set aftikt. */
   autoStartRest: boolean
-  /** Gewicht van de lege stang (kg) — basis voor de opwarmsets. */
+  /** Piepje als de rust voorbij is. */
+  timerSound: boolean
+  /** Trillen als de rust voorbij is (werkt niet op iPhone). */
+  timerVibrate: boolean
+  /** Gewicht van de lege stang (kg) — basis voor opwarmsets en schijven. */
   barWeight: number
+  /** Toon per oefening welke schijven er per kant op de stang moeten. */
+  showPlates: boolean
+  /** Houd het scherm aan tijdens een workout. */
+  keepAwake: boolean
 }
 
 const STORAGE_KEY = 'reforged:settings'
-const DEFAULTS: Settings = { restSeconds: 180, autoStartRest: true, barWeight: 20 }
+const DEFAULTS: Settings = {
+  restSeconds: 180,
+  autoStartRest: true,
+  timerSound: true,
+  timerVibrate: true,
+  barWeight: 20,
+  showPlates: true,
+  keepAwake: true,
+}
 
 function load(): Settings {
   try {
@@ -27,14 +43,22 @@ export const useSettingsStore = defineStore('settings', () => {
   const initial = load()
   const restSeconds = ref(initial.restSeconds)
   const autoStartRest = ref(initial.autoStartRest)
+  const timerSound = ref(initial.timerSound)
+  const timerVibrate = ref(initial.timerVibrate)
   const barWeight = ref(initial.barWeight)
+  const showPlates = ref(initial.showPlates)
+  const keepAwake = ref(initial.keepAwake)
 
-  watch([restSeconds, autoStartRest, barWeight], () => {
+  watch([restSeconds, autoStartRest, timerSound, timerVibrate, barWeight, showPlates, keepAwake], () => {
     const value: Settings = {
       restSeconds: restSeconds.value,
       autoStartRest: autoStartRest.value,
+      timerSound: timerSound.value,
+      timerVibrate: timerVibrate.value,
       // Leeg invoerveld levert '' of NaN op; val dan terug op de standaard.
       barWeight: Number.isFinite(barWeight.value) && barWeight.value > 0 ? barWeight.value : 20,
+      showPlates: showPlates.value,
+      keepAwake: keepAwake.value,
     }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
@@ -43,5 +67,5 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   })
 
-  return { restSeconds, autoStartRest, barWeight }
+  return { restSeconds, autoStartRest, timerSound, timerVibrate, barWeight, showPlates, keepAwake }
 })

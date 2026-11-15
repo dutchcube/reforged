@@ -1,15 +1,62 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+import { downloadCsv, sessionsToCsv } from '@/lib/csv'
 import { formatClock } from '@/lib/format'
 import { DELOAD_FACTOR, FAILS_BEFORE_DELOAD } from '@/lib/progression'
+import { dayKey } from '@/lib/stats'
 import { useAuthStore } from '@/stores/auth'
+import { useHistoryStore } from '@/stores/history'
+import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 
 const REST_OPTIONS = [90, 120, 180, 300]
 
 const auth = useAuthStore()
 const settings = useSettingsStore()
+const history = useHistoryStore()
+const session = useSessionStore()
 
 const deloadPercent = Math.round((1 - DELOAD_FACTOR) * 100)
+const canVibrate = typeof navigator !== 'undefined' && 'vibrate' in navigator
+const canKeepAwake = typeof navigator !== 'undefined' && 'wakeLock' in navigator
+
+const exporting = ref(false)
+const exportNote = ref('')
+
+/** Haalt de nieuwste historie op en biedt hem aan als CSV-bestand. */
+async function exportCsv() {
+  exporting.value = true
+  exportNote.value = ''
+  await history.fetchSessions()
+  exporting.value = false
+
+  if (!history.sessions.length) {
+    exportNote.value = history.error ?? 'Er zijn nog geen sessies om te exporteren.'
+    return
+  }
+  downloadCsv(`reforged-${dayKey(new Date())}.csv`, sessionsToCsv(history.sessions))
+  const n = history.sessions.length
+  exportNote.value =
+    `${n} ${n === 1 ? 'sessie' : 'sessies'} geëxporteerd.` +
+    (history.offline ? ' Je bent offline: dit is de laatst bekende stand.' : '')
+}
+
+async function sync() {
+  const sent = await session.flushPending()
+  if (sent) await history.fetchSessions()
+}
+
+function signOut() {
+  if (
+    session.pendingCount &&
+    !confirm(
+      'Er staan nog sessies op dit toestel die niet zijn verstuurd. Als je uitlogt, gaan ze verloren. Toch uitloggen?',
+    )
+  ) {
+    return
+  }
+  auth.signOut()
+}
 </script>
 
 <template>
@@ -54,6 +101,23 @@ const deloadPercent = Math.round((1 - DELOAD_FACTOR) * 100)
           class="size-5 shrink-0 accent-volt-500"
         />
       </label>
+
+      <label class="flex items-center justify-between gap-4">
+        <span>
+          <span class="block text-sm">Geluid als de rust voorbij is</span>
+          <span class="block text-xs text-ink-400">Twee korte piepjes. Werkt niet in de stille modus.</span>
+        </span>
+        <input v-model="settings.timerSound" type="checkbox" class="size-5 shrink-0 accent-volt-500" />
+      </label>
+
+      <label v-if="canVibrate" class="flex items-center justify-between gap-4">
+        <span class="block text-sm">Trillen als de rust voorbij is</span>
+        <input
+          v-model="settings.timerVibrate"
+          type="checkbox"
+          class="size-5 shrink-0 accent-volt-500"
+        />
+      </label>
     </section>
 
     <section class="card mt-3 space-y-4 p-4">
@@ -62,7 +126,7 @@ const deloadPercent = Math.round((1 - DELOAD_FACTOR) * 100)
       <label class="flex items-center justify-between gap-4">
         <span>
           <span class="block text-sm">Gewicht lege stang (kg)</span>
-          <span class="block text-xs text-ink-400">Startpunt van de opwarmsets.</span>
+          <span class="block text-xs text-ink-400">Basis voor de opwarmsets en de schijven.</span>
         </span>
         <input
           v-model.number="settings.barWeight"
@@ -74,17 +138,69 @@ const deloadPercent = Math.round((1 - DELOAD_FACTOR) * 100)
         />
       </label>
 
+      <label class="flex items-center justify-between gap-4">
+        <span>
+          <span class="block text-sm">Schijven per kant tonen</span>
+          <span class="block text-xs text-ink-400">Welke schijven er op de stang moeten.</span>
+        </span>
+        <input v-model="settings.showPlates" type="checkbox" class="size-5 shrink-0 accent-volt-500" />
+      </label>
+
+      <label class="flex items-center justify-between gap-4">
+        <span>
+          <span class="block text-sm">Scherm aan houden</span>
+          <span class="block text-xs text-ink-400">
+            {{
+              canKeepAwake
+                ? 'Tijdens een workout gaat je telefoon niet op slot.'
+                : 'Deze browser ondersteunt dit niet.'
+            }}
+          </span>
+        </span>
+        <input
+          v-model="settings.keepAwake"
+          type="checkbox"
+          class="size-5 shrink-0 accent-volt-500"
+          :disabled="!canKeepAwake"
+        />
+      </label>
+
       <p class="text-xs leading-relaxed text-ink-400">
         Progressie: haal je alle sets, dan gaat het gewicht de volgende keer omhoog met de stap van
         die oefening. Lukt het {{ FAILS_BEFORE_DELOAD }} sessies op rij niet, dan gaat het
-        {{ deloadPercent }}% omlaag. De stap stel je per oefening in bij Programma's.
+        {{ deloadPercent }}% omlaag. De stap stel je per oefening in bij Programma's; met stap 0
+        verandert het gewicht nooit vanzelf (handig voor accessoire-oefeningen).
       </p>
+    </section>
+
+    <section class="card mt-3 space-y-4 p-4">
+      <h2 class="text-xs font-semibold tracking-wide text-ink-400 uppercase">Gegevens</h2>
+
+      <div v-if="session.pendingCount" class="space-y-2">
+        <p class="text-sm">
+          {{ session.pendingCount }}
+          {{ session.pendingCount === 1 ? 'sessie wacht' : 'sessies wachten' }} op verbinding.
+        </p>
+        <button type="button" class="btn-ghost w-full" :disabled="session.syncing" @click="sync">
+          {{ session.syncing ? 'Versturen…' : 'Nu versturen' }}
+        </button>
+        <p v-if="session.error" class="text-xs text-danger-500" role="alert">{{ session.error }}</p>
+      </div>
+
+      <div class="space-y-2">
+        <button type="button" class="btn-ghost w-full" :disabled="exporting" @click="exportCsv">
+          {{ exporting ? 'Bezig…' : 'Historie exporteren (CSV)' }}
+        </button>
+        <p class="text-xs text-ink-400" role="status">
+          {{ exportNote || 'Eén regel per oefening per sessie; te openen in Excel.' }}
+        </p>
+      </div>
     </section>
 
     <section class="card mt-3 space-y-4 p-4">
       <h2 class="text-xs font-semibold tracking-wide text-ink-400 uppercase">Account</h2>
       <p class="truncate text-sm">{{ auth.user?.email }}</p>
-      <button type="button" class="btn-ghost w-full" @click="auth.signOut()">Uitloggen</button>
+      <button type="button" class="btn-ghost w-full" @click="signOut">Uitloggen</button>
     </section>
   </main>
 </template>

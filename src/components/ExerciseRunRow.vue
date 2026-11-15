@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import SetCircle from './SetCircle.vue'
 import { formatWeight } from '@/lib/format'
+import { formatPlates, platesPerSide } from '@/lib/plates'
 import { PLATE_STEP } from '@/lib/progression'
 import type { SetValue } from '@/stores/session'
 
@@ -11,6 +12,8 @@ const props = defineProps<{
   targetReps: number
   weight: number | null
   values: SetValue[]
+  /** Gewicht van de lege stang; null = schijven niet tonen. */
+  barWeight?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -21,6 +24,17 @@ const emit = defineEmits<{
 /** Alle sets aangetikt én allemaal vol → de rij "glowt". */
 const allDone = computed(() => props.values.every((v) => v === props.targetReps))
 const anyDone = computed(() => props.values.some((v) => v !== null))
+
+/** Schijven per kant, bijv. "20 + 15 + 5"; leeg als het niet van toepassing is. */
+const plates = computed(() => {
+  if (props.barWeight === null || props.barWeight === undefined) return null
+  const load = platesPerSide(props.weight, props.barWeight)
+  if (!load || !load.perSide.length) return null
+  return {
+    text: formatPlates(load),
+    remainder: load.remainder > 0 ? String(load.remainder * 2).replace('.', ',') : '',
+  }
+})
 </script>
 
 <template>
@@ -69,6 +83,11 @@ const anyDone = computed(() => props.values.some((v) => v !== null))
         @tap="emit('tap', i)"
       />
     </div>
+
+    <p v-if="plates" class="tabular mt-3 text-xs text-ink-400">
+      Per kant: <span class="font-semibold text-ink-100">{{ plates.text }}</span>
+      <span v-if="plates.remainder"> ({{ plates.remainder }} kg past niet met deze schijven)</span>
+    </p>
 
     <p v-if="anyDone && !allDone" class="mt-3 text-xs text-ink-400">
       Tik nogmaals voor minder reps.

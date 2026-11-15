@@ -54,12 +54,16 @@ describe('nextProgression', () => {
     expect(result.weight).toBe(105)
   })
 
-  it('houdt het gewicht gelijk bij een stap van 0', () => {
+  it('laat een accessoire-oefening (stap 0) altijd ongemoeid', () => {
     expect(nextProgression({ ...base, increment: 0, repsDone: [5, 5, 5, 5, 5] })).toEqual({
       weight: 100,
       failCount: 0,
-      outcome: 'hold',
+      outcome: 'none',
     })
+    // ook na herhaald missen volgt er geen deload
+    expect(
+      nextProgression({ ...base, increment: 0, failCount: 2, repsDone: [5, 4, 3, 0, 0] }),
+    ).toEqual({ weight: 100, failCount: 2, outcome: 'none' })
   })
 
   it('houdt het gewicht vast en telt de mislukte sessie', () => {

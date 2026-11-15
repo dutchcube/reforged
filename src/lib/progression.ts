@@ -44,6 +44,7 @@ export function defaultIncrement(exerciseName: string): number {
  * Bepaalt gewicht en fail_count voor de volgende sessie.
  *
  *   overgeslagen (geen set aangetikt) of geen gewicht -> niets verandert
+ *   stap 0 (accessoire-oefening)                      -> niets verandert
  *   geslaagd                                          -> + increment, teller op 0
  *   mislukt, nog geen 3x op rij                       -> gewicht blijft, teller + 1
  *   3x op rij mislukt                                 -> 10% terug, teller op 0
@@ -52,14 +53,11 @@ export function nextProgression(input: ProgressionInput): ProgressionResult {
   const { weight, increment, failCount, targetReps, repsDone } = input
 
   const skipped = repsDone.every((v) => v === null)
-  if (weight === null || skipped) return { weight, failCount, outcome: 'none' }
+  // Stap 0 = accessoire-oefening: het gewicht verandert nooit vanzelf, ook geen deload.
+  if (weight === null || skipped || increment <= 0) return { weight, failCount, outcome: 'none' }
 
   if (isSuccess(repsDone, targetReps)) {
-    return {
-      weight: Number((weight + increment).toFixed(2)),
-      failCount: 0,
-      outcome: increment > 0 ? 'up' : 'hold',
-    }
+    return { weight: Number((weight + increment).toFixed(2)), failCount: 0, outcome: 'up' }
   }
 
   const fails = failCount + 1

@@ -2,14 +2,20 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { defaultIncrement } from '@/lib/progression'
+import { isNetworkError, readJson, writeJson } from '@/lib/storage'
 import type { ExerciseDraft, Workout } from '@/lib/types'
 
+const CACHE_KEY = 'reforged:workouts-cache'
+
 export const useWorkoutsStore = defineStore('workouts', () => {
-  const workouts = ref<Workout[]>([])
+  // Begin met de offline-kopie: de app is direct bruikbaar, ook zonder bereik.
+  const workouts = ref<Workout[]>(readJson<Workout[]>(CACHE_KEY, []))
   const loading = ref(false)
-  /** True zodra de lijst minstens één keer is opgehaald. */
-  const loaded = ref(false)
+  /** True zodra de lijst minstens één keer is opgehaald (of uit de offline-kopie komt). */
+  const loaded = ref(workouts.value.length > 0)
   const error = ref<string | null>(null)
+  /** True als de laatste poging mislukte door de verbinding. */
+  const offline = ref(false)
 
   async function fetchWorkouts() {
     loading.value = true
@@ -20,12 +26,37 @@ export const useWorkoutsStore = defineStore('workouts', () => {
       .order('position', { ascending: true })
       .order('position', { referencedTable: 'exercises', ascending: true })
 
-    if (err) error.value = err.message
-    else {
+    if (err) {
+      offline.value = isNetworkError(err.message)
+      // Zonder verbinding blijft de offline-kopie staan, zodat je toch kunt trainen.
+      if (offline.value && workouts.value.length) loaded.value = true
+      else error.value = offline.value ? 'Geen verbinding en nog geen offline-kopie.' : err.message
+    } else {
+      offline.value = false
       workouts.value = (data as Workout[]) ?? []
       loaded.value = true
+      writeJson(CACHE_KEY, workouts.value)
     }
     loading.value = false
+  }
+
+  /**
+   * Past de progressie van een offline afgeronde sessie alvast lokaal toe,
+   * zodat de volgende workout met de juiste gewichten begint.
+   */
+  function applyProgression(
+    updates: Array<{ exerciseId: string | null; weight: number | null; failCount: number }>,
+  ) {
+    for (const u of updates) {
+      if (!u.exerciseId || u.weight === null) continue
+      for (const w of workouts.value) {
+        const ex = w.exercises?.find((e) => e.id === u.exerciseId)
+        if (!ex) continue
+        ex.weight = u.weight
+        ex.fail_count = u.failCount
+      }
+    }
+    writeJson(CACHE_KEY, workouts.value)
   }
 
   function getWorkout(id: string) {
@@ -92,6 +123,7 @@ export const useWorkoutsStore = defineStore('workouts', () => {
       return false
     }
     workouts.value = workouts.value.filter((w) => w.id !== id)
+    writeJson(CACHE_KEY, workouts.value)
     return true
   }
 
@@ -100,6 +132,8 @@ export const useWorkoutsStore = defineStore('workouts', () => {
     loading,
     loaded,
     error,
+    offline,
+    applyProgression,
     fetchWorkouts,
     fetchWorkout,
     getWorkout,

@@ -11,12 +11,17 @@ de schermindeling met tabbalk en historie uit `Easylifts`.
 - **Start** — toont de workout die nu aan de beurt is (A → B → A …), met geschatte eindtijd.
 - **Programma's** — workouts maken, bewerken, ordenen en verwijderen.
 - **Uitvoeren** — set-circles, voortgangsbalk, rusttimer die vanzelf start, gewicht bijstellen,
-  tab met opwarmsets, lichaamsgewicht en notitie.
+  tab met opwarmsets, lichaamsgewicht en notitie. Per oefening staat welke schijven er per
+  kant op de stang moeten; het scherm blijft aan. Na afloop een samenvatting met nieuwe records.
 - **Historie** — alle voltooide sessies, met duur en notitie; per sessie te verwijderen.
-- **Voortgang** — grafiek van het gewicht per oefening.
-- **Instellingen** — standaard rusttijd, timer automatisch starten, gewicht van de stang.
+- **Voortgang** — per oefening een grafiek van gewicht, geschatte 1RM of volume, met records.
+  Daarnaast een overzicht: trainingsdagen, volume per week, lichaamsgewicht en aandachtspunten.
+- **Instellingen** — rusttijd, geluid en trillen van de timer, gewicht van de stang, schijven,
+  scherm aan houden en export van de historie naar CSV.
 - **Progressie** — alle sets gehaald: gewicht + stap (standaard 2,5 kg, deadlift 5 kg).
-  Drie sessies op rij niet gehaald: 10% terug.
+  Drie sessies op rij niet gehaald: 10% terug. Stap 0 = accessoire-oefening zonder progressie.
+- **Offline** — workouts en historie staan ook op het toestel. Een sessie die je zonder bereik
+  afrondt, wordt verstuurd zodra je weer online bent.
 - **PWA** — installeerbaar op het beginscherm; een lopende sessie overleeft een refresh.
 
 ## Stack
@@ -66,7 +71,8 @@ src/
 └─ assets/       main.css — Tailwind-import + @theme design tokens
 supabase/migrations/
 ├─ 001_init.sql       tabellen + RLS-policies
-└─ 002_reforged.sql   progressie-kolommen + RPC's save_workout en finish_session
+├─ 002_reforged.sql   progressie-kolommen + RPC's save_workout en finish_session
+└─ 003_offline.sql    finish_session: offline afgeronde sessies veilig nasturen
 ```
 
 ## Ontwerpkeuzes

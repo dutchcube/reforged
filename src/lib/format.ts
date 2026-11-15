@@ -4,6 +4,19 @@ export function formatWeight(weight: number | null): string {
   return `${String(Number(weight)).replace('.', ',')}kg`
 }
 
+/** "12.450 kg" — grote getallen (volume) afgerond op hele kilo's met een duizendtalpunt. */
+export function formatKg(value: number): string {
+  return `${Math.round(value)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, '.')} kg`
+}
+
+/** "3 nov" voor een ISO-tijdstip of een dagsleutel ("2026-11-03"). */
+export function formatShortDate(value: string): string {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value)
+  return date.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }).replace(/\./g, '')
+}
+
 /** "5×5 · 100kg" of "5×5" als er geen gewicht is. */
 export function formatTarget(sets: number, reps: number, weight: number | null): string {
   const base = `${sets}×${reps}`

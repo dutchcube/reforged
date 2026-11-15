@@ -1,9 +1,17 @@
+import { isSuccess } from './progression'
+import { bestE1RM, exerciseVolume } from './stats'
 import type { Session } from './types'
 
 export interface ProgressPoint {
   /** ISO-tijdstip waarop de sessie is afgerond. */
   at: string
   weight: number
+  /** Geschatte 1RM van de beste set; null als er geen rep is gehaald. */
+  e1rm: number | null
+  /** Gewicht × alle gehaalde reps (kg). */
+  volume: number
+  /** Alle sets gehaald. */
+  success: boolean
 }
 
 export interface ExerciseSeries {
@@ -21,8 +29,16 @@ export function buildSeries(sessions: Session[]): ExerciseSeries[] {
   for (const session of sessions) {
     for (const ex of session.session_exercises ?? []) {
       if (ex.weight === null) continue
+      const weight = Number(ex.weight)
+      const reps = ex.reps_done ?? []
       const points = byName.get(ex.exercise_name) ?? []
-      points.push({ at: session.completed_at, weight: Number(ex.weight) })
+      points.push({
+        at: session.completed_at,
+        weight,
+        e1rm: bestE1RM(weight, reps),
+        volume: exerciseVolume(weight, reps),
+        success: isSuccess(reps, ex.target_reps),
+      })
       byName.set(ex.exercise_name, points)
     }
   }
@@ -44,30 +60,44 @@ export interface ChartGeometry {
 }
 
 /**
- * Zet meetpunten om naar coördinaten binnen een vlak van width × height.
+ * Zet waarden om naar coördinaten binnen een vlak van width × height.
  * De punten staan op gelijke afstand: het gaat om het verloop per sessie.
  */
-export function chartGeometry(
-  points: ProgressPoint[],
+export function lineGeometry(
+  values: number[],
   width: number,
   height: number,
   padding = 8,
 ): ChartGeometry {
-  if (!points.length) return { path: '', dots: [], min: 0, max: 0 }
+  if (!values.length) return { path: '', dots: [], min: 0, max: 0 }
 
-  const weights = points.map((p) => p.weight)
-  const min = Math.min(...weights)
-  const max = Math.max(...weights)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
   const span = max - min || 1
   const innerW = width - padding * 2
   const innerH = height - padding * 2
 
-  const dots = points.map((p, i) => ({
-    x: padding + (points.length === 1 ? innerW / 2 : (i / (points.length - 1)) * innerW),
+  const dots = values.map((v, i) => ({
+    x: padding + (values.length === 1 ? innerW / 2 : (i / (values.length - 1)) * innerW),
     // één meetpunt of een vlakke lijn: midden in het vlak
-    y: max === min ? height / 2 : padding + (1 - (p.weight - min) / span) * innerH,
+    y: max === min ? height / 2 : padding + (1 - (v - min) / span) * innerH,
   }))
 
   const path = dots.map((d, i) => `${i === 0 ? 'M' : 'L'}${d.x.toFixed(1)} ${d.y.toFixed(1)}`).join(' ')
   return { path, dots, min, max }
+}
+
+/** Lijn van het gewicht per sessie. */
+export function chartGeometry(
+  points: Array<{ weight: number; at?: string }>,
+  width: number,
+  height: number,
+  padding = 8,
+): ChartGeometry {
+  return lineGeometry(
+    points.map((p) => p.weight),
+    width,
+    height,
+    padding,
+  )
 }

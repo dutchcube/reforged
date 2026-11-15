@@ -61,7 +61,7 @@ Herstart daarna `npm run dev` — Vite leest env-vars alleen bij het opstarten.
 
 ## 4. Database aanmaken
 
-Open in Supabase de **SQL Editor** → **New query** en draai de twee scripts in deze volgorde,
+Open in Supabase de **SQL Editor** → **New query** en draai de drie scripts in deze volgorde,
 elk in een eigen query (**Run**):
 
 1. [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql) — maakt de vier
@@ -71,7 +71,12 @@ elk in een eigen query (**Run**):
    kolommen voor progressie, lichaamsgewicht en notitie toe, plus de functies `save_workout`
    en `finish_session` waarmee de app opslaat.
 
-Had je het oude `workout-app`-project al draaien? Dan volstaat script 2; je data blijft staan.
+3. [`supabase/migrations/003_offline.sql`](supabase/migrations/003_offline.sql) — laat
+   `finish_session` een offline afgeronde sessie veilig nasturen: met de juiste eindtijd en
+   nooit dubbel. Zonder dit script werkt de app ook, maar krijgt een nagestuurde sessie het
+   tijdstip van versturen.
+
+Had je het oude `workout-app`-project al draaien? Dan volstaan script 2 en 3; je data blijft staan.
 
 ## Controleren of het werkt
 
