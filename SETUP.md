@@ -78,6 +78,13 @@ elk in een eigen query (**Run**):
 
 Had je het oude `workout-app`-project al draaien? Dan volstaan script 2 en 3; je data blijft staan.
 
+### Voorbeelddata (optioneel)
+
+Wil je de app direct met gevulde grafieken proberen? Log één keer in en draai dan
+[`supabase/seed.sql`](supabase/seed.sql) in de SQL Editor. Dat voegt 4 workouts en 34 afgeronde
+sessies over ~12 weken toe, aan jouw account gekoppeld. Het script weigert als je account al
+workouts of sessies heeft. Onderaan staat hoe je alles weer wist.
+
 ## Controleren of het werkt
 
 1. `npm run dev` → open <http://localhost:5173> **in je eigen browser**

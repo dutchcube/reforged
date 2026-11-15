@@ -72,7 +72,8 @@ src/
 supabase/migrations/
 ├─ 001_init.sql       tabellen + RLS-policies
 ├─ 002_reforged.sql   progressie-kolommen + RPC's save_workout en finish_session
-└─ 003_offline.sql    finish_session: offline afgeronde sessies veilig nasturen
+├─ 003_offline.sql    finish_session: offline afgeronde sessies veilig nasturen
+seed.sql              optionele voorbeelddata: 4 workouts en 34 sessies
 ```
 
 ## Ontwerpkeuzes

@@ -186,6 +186,30 @@ describe('lichaamsgewicht en aandachtspunten', () => {
     ]
     expect(exerciseHealth(history)).toEqual([{ name: 'Squat', weight: 90, failStreak: 2, drops: 1 }])
   })
+
+  it('laat accessoires (stap 0) buiten de aandachtspunten', () => {
+    const history = [
+      session(at(11, 12), [
+        ['Squat', 100, [5, 4, 3]],
+        ['Barbell Curl', 25, [5, 4, 3]],
+      ]),
+    ]
+    const increments = new Map([
+      ['Squat', 2.5],
+      ['Barbell Curl', 0],
+    ])
+    expect(exerciseHealth(history, increments).map((h) => h.name)).toEqual(['Squat'])
+    // zonder stappen weten we niet welke accessoires zijn; bij gelijke stand telt de naam
+    expect(exerciseHealth(history).map((h) => h.name)).toEqual(['Barbell Curl', 'Squat'])
+  })
+
+  it('zet oefeningen die echt veranderen vóór vlakke lijnen bij evenveel metingen', () => {
+    const history = [
+      session(at(11, 12), [['Barbell Curl', 25, FIVES], ['Squat', 102.5, FIVES]]),
+      session(at(11, 10), [['Barbell Curl', 25, FIVES], ['Squat', 100, FIVES]]),
+    ]
+    expect(buildSeries(history).map((s) => s.name)).toEqual(['Squat', 'Barbell Curl'])
+  })
 })
 
 describe('schijven', () => {

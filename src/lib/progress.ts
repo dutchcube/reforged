@@ -43,12 +43,21 @@ export function buildSeries(sessions: Session[]): ExerciseSeries[] {
     }
   }
 
+  // Oefeningen die echt veranderen komen eerst: een vlakke lijn is een slechte opening.
+  const range = (s: ExerciseSeries) => {
+    const weights = s.points.map((p) => p.weight)
+    return Math.max(...weights) - Math.min(...weights)
+  }
+
   return [...byName.entries()]
     .map(([name, points]) => ({
       name,
       points: points.sort((a, b) => a.at.localeCompare(b.at)),
     }))
-    .sort((a, b) => b.points.length - a.points.length || a.name.localeCompare(b.name))
+    .sort(
+      (a, b) =>
+        b.points.length - a.points.length || range(b) - range(a) || a.name.localeCompare(b.name),
+    )
 }
 
 export interface ChartGeometry {

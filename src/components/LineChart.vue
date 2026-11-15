@@ -53,7 +53,7 @@ function onKey(event: KeyboardEvent) {
 <template>
   <svg
     :viewBox="`0 0 ${W} ${H}`"
-    class="w-full touch-pan-y select-none focus-visible:outline-1 focus-visible:outline-volt-500"
+    class="w-full touch-pan-y rounded-lg outline-none select-none focus-visible:outline-2 focus-visible:outline-volt-500"
     role="img"
     tabindex="0"
     :aria-label="label"

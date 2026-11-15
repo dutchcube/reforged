@@ -141,7 +141,7 @@ function signOut() {
       <label class="flex items-center justify-between gap-4">
         <span>
           <span class="block text-sm">Schijven per kant tonen</span>
-          <span class="block text-xs text-ink-400">Welke schijven er op de stang moeten.</span>
+          <span class="block text-xs text-ink-400">Bij de hoofdoefeningen (stap boven 0).</span>
         </span>
         <input v-model="settings.showPlates" type="checkbox" class="size-5 shrink-0 accent-volt-500" />
       </label>

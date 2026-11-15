@@ -25,6 +25,10 @@
 @layer base {
   html {
     background-color: var(--color-ink-900);
+    /* Donkere native onderdelen: scrollbalken, invoervelden, kiezers */
+    color-scheme: dark;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-ink-500) transparent;
     /* Voorkomt dat dubbeltik op set-circles inzoomt op mobiel */
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
@@ -68,6 +72,25 @@
 @utility input {
   @apply w-full rounded-lg border border-ink-600 bg-ink-700 px-3 py-2 text-ink-100
          placeholder:text-ink-400 focus:border-volt-500 focus:ring-0 focus:outline-none;
+}
+
+/* Scrollbaar zonder zichtbare scrollbalk (swipen blijft werken). */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Zachte rand links en rechts: laat zien dat er meer te scrollen valt. */
+@utility fade-x {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 1rem,
+    #000 calc(100% - 1.5rem),
+    transparent
+  );
 }
 
 @utility tabular {

@@ -45,7 +45,9 @@ const warmups = computed(() =>
   (active.value?.exercises ?? []).map((ex) => ({
     name: ex.name,
     weight: ex.weight,
-    sets: warmupSets(ex.weight, settings.barWeight).map((s) => ({
+    // Opwarmen en schijven horen bij de hoofdoefeningen aan de stang, niet bij accessoires.
+    accessory: ex.increment <= 0,
+    sets: (ex.increment > 0 ? warmupSets(ex.weight, settings.barWeight) : []).map((s) => ({
       ...s,
       plates: settings.showPlates ? platesText(s.weight) : '',
     })),
@@ -298,7 +300,7 @@ onBeforeRouteLeave(() => {
           :target-reps="ex.target_reps"
           :weight="ex.weight"
           :values="ex.values"
-          :bar-weight="settings.showPlates ? settings.barWeight : null"
+          :bar-weight="settings.showPlates && ex.increment > 0 ? settings.barWeight : null"
           @tap="(setIndex) => tap(i, setIndex)"
           @adjust="(delta) => session.adjustWeight(i, delta)"
         />
@@ -357,9 +359,11 @@ onBeforeRouteLeave(() => {
           </ul>
           <p v-else class="text-sm text-ink-400">
             {{
-              w.weight === null
-                ? 'Geen gewicht ingesteld.'
-                : 'Zo licht dat opwarmen met de lege stang volstaat.'
+              w.accessory
+                ? 'Accessoire: opwarmen is niet nodig.'
+                : w.weight === null
+                  ? 'Geen gewicht ingesteld.'
+                  : 'Zo licht dat opwarmen met de lege stang volstaat.'
             }}
           </p>
         </section>

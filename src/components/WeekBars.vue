@@ -57,7 +57,7 @@ function barPath(b: { x: number; y: number; width: number; height: number }): st
           :width="b.width + GAP"
           :height="H"
           fill="transparent"
-          class="cursor-pointer"
+          class="cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-volt-500"
           role="button"
           tabindex="0"
           :aria-label="`Week van ${formatShortDate(weeks[i].weekStart)}: ${formatKg(weeks[i].volume)}`"

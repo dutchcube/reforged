@@ -260,11 +260,16 @@ export interface ExerciseHealth {
  * Per oefening: loopt hij vast en hoe vaak is het gewicht verlaagd?
  * Alleen oefeningen met een failStreak of een verlaging komen terug.
  */
-export function exerciseHealth(sessions: Session[]): ExerciseHealth[] {
+export function exerciseHealth(
+  sessions: Session[],
+  /** Huidige stap per oefening. Stap 0 = accessoire: die loopt nooit vast en krijgt geen deload. */
+  increments?: ReadonlyMap<string, number>,
+): ExerciseHealth[] {
   const byName = new Map<string, Array<{ at: string; weight: number; success: boolean }>>()
   for (const s of sessions) {
     for (const ex of s.session_exercises ?? []) {
       if (ex.weight === null) continue
+      if (increments?.get(ex.exercise_name) === 0) continue
       const reps = ex.reps_done ?? []
       // overgeslagen oefening zegt niets over vastlopen
       if (reps.every((r) => r === 0)) continue

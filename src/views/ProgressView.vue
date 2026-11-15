@@ -16,6 +16,7 @@ import {
   weeklyVolume,
 } from '@/lib/stats'
 import { useHistoryStore } from '@/stores/history'
+import { useWorkoutsStore } from '@/stores/workouts'
 
 const CALENDAR_WEEKS = 16
 const VOLUME_WEEKS = 12
@@ -28,7 +29,11 @@ const METRICS: Array<{ key: Metric; label: string; hint: string }> = [
 ]
 
 const history = useHistoryStore()
-onMounted(() => history.fetchSessions())
+const workouts = useWorkoutsStore()
+onMounted(() => {
+  history.fetchSessions()
+  workouts.fetchWorkouts()
+})
 
 const tab = ref<'exercises' | 'overview'>('exercises')
 
@@ -74,7 +79,16 @@ const stats = computed(() => {
 const records = computed(() => buildRecords(history.sessions))
 const currentRecord = computed(() => records.value.find((r) => r.name === current.value?.name) ?? null)
 
-const health = computed(() => exerciseHealth(history.sessions))
+/** Stap per oefening uit de programma's, zodat accessoires geen aandachtspunt worden. */
+const increments = computed(
+  () =>
+    new Map(
+      workouts.workouts.flatMap((w) =>
+        (w.exercises ?? []).map((e) => [e.name, Number(e.increment)] as const),
+      ),
+    ),
+)
+const health = computed(() => exerciseHealth(history.sessions, increments.value))
 const currentHealth = computed(() => health.value.find((h) => h.name === current.value?.name) ?? null)
 
 /** Verhouding tussen het zwaarste gewicht en je laatst ingevulde lichaamsgewicht. */
@@ -161,7 +175,7 @@ function healthText(h: { weight: number; failStreak: number; drops: number }): s
       <!-- ============================================================ Oefeningen -->
       <template v-if="tab === 'exercises'">
         <template v-if="current">
-          <div class="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist" aria-label="Oefening">
+          <div class="scrollbar-none fade-x -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist" aria-label="Oefening">
             <button
               v-for="s in series"
               :key="s.name"
