@@ -14,6 +14,8 @@ export default defineConfig({
     // Data (Supabase) heeft wel verbinding nodig; een lopende sessie staat lokaal.
     VitePWA({
       registerType: 'autoUpdate',
+      // De registratie staat in src/main.ts, zodat de app bij een update zelf opnieuw laadt.
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Reforged — workout tracker',
@@ -32,6 +34,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Een nieuwe versie neemt meteen het werk over; main.ts laadt de pagina dan opnieuw.
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // Auth-redirects en API-verkeer nooit uit de cache beantwoorden.
         navigateFallbackDenylist: [/^\/auth\//],
