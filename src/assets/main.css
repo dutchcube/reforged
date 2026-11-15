@@ -29,6 +29,8 @@
     color-scheme: dark;
     scrollbar-width: thin;
     scrollbar-color: var(--color-ink-500) transparent;
+    /* Ruimte voor de scrollbalk reserveren: de inhoud verspringt niet tussen korte en lange pagina's. */
+    scrollbar-gutter: stable;
     /* Voorkomt dat dubbeltik op set-circles inzoomt op mobiel */
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
@@ -82,13 +84,14 @@
   }
 }
 
-/* Zachte rand links en rechts: laat zien dat er meer te scrollen valt. */
+/* Zachte rand aan de kant waar nog meer staat. De breedtes komen uit --fade-l en
+   --fade-r (0 = geen vervaging), zodat het begin en eind van de rij scherp blijven. */
 @utility fade-x {
   mask-image: linear-gradient(
     to right,
     transparent,
-    #000 1rem,
-    #000 calc(100% - 1.5rem),
+    #000 var(--fade-l, 0px),
+    #000 calc(100% - var(--fade-r, 0px)),
     transparent
   );
 }

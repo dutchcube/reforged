@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { sessionsToCsv } from './csv'
 import { formatKg, formatShortDate } from './format'
 import { formatPlates, platesPerSide } from './plates'
-import { buildSeries } from './progress'
+import { buildSeries, niceTicks } from './progress'
 import {
   bestE1RM,
   bodyWeightSeries,
@@ -227,6 +227,25 @@ describe('schijven', () => {
 
   it('gebruikt alleen de schijven die er zijn', () => {
     expect(platesPerSide(70, 20, [20, 10, 5])).toEqual({ perSide: [20, 5], remainder: 0 })
+  })
+})
+
+describe('as van de grafiek', () => {
+  it('kiest ronde waarden die het bereik omsluiten', () => {
+    expect(niceTicks(80, 95)).toEqual([80, 85, 90, 95])
+    expect(niceTicks(82, 83.3)).toEqual([82, 82.5, 83, 83.5])
+    expect(niceTicks(41, 49.6)).toEqual([40, 45, 50])
+    expect(niceTicks(2000, 2437)).toEqual([2000, 2200, 2400, 2600])
+  })
+
+  it('geeft een vlakke reeks een streep erboven en eronder', () => {
+    expect(niceTicks(25, 25)).toEqual([22.5, 25, 27.5])
+    expect(niceTicks(0, 0)).toEqual([-1, 0, 1])
+  })
+
+  it('bewaart de reps per sessie voor de lijst onder de grafiek', () => {
+    const [squat] = buildSeries([session(at(11, 10), [['Squat', 100, [5, 5, 4]]])])
+    expect(squat.points[0]).toMatchObject({ reps: [5, 5, 4], targetReps: 5 })
   })
 })
 

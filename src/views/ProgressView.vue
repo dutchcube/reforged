@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import LineChart from '@/components/LineChart.vue'
 import TrainingCalendar from '@/components/TrainingCalendar.vue'
 import WeekBars from '@/components/WeekBars.vue'
-import { formatDay, formatKg, formatShortDate, formatWeight } from '@/lib/format'
+import { formatDay, formatKg, formatReps, formatShortDate, formatWeight } from '@/lib/format'
+import { useHorizontalScroll } from '@/lib/horizontalScroll'
 import { FAILS_BEFORE_DELOAD } from '@/lib/progression'
 import { buildSeries } from '@/lib/progress'
 import {
@@ -46,15 +47,55 @@ const current = computed(
   () => series.value.find((s) => s.name === picked.value) ?? series.value[0] ?? null,
 )
 
+const chipRow = ref<HTMLElement | null>(null)
+const chips = useHorizontalScroll(chipRow)
+// Andere oefeningen = andere breedte: opnieuw bepalen of er links of rechts meer staat.
+watch(series, () => nextTick(chips.update))
+
+/** Schuift een (half verborgen) knop helemaal in beeld. */
+function reveal(event: Event) {
+  ;(event.currentTarget as HTMLElement).scrollIntoView({
+    inline: 'nearest',
+    block: 'nearest',
+    behavior: 'smooth',
+  })
+}
+
+function pickExercise(name: string, event: Event) {
+  picked.value = name
+  showAllRows.value = false
+  reveal(event)
+}
+
 const metric = ref<Metric>('weight')
 const metricInfo = computed(() => METRICS.find((m) => m.key === metric.value)!)
 
 /** Meetpunten voor de gekozen maat; sessies zonder gehaalde rep hebben geen 1RM. */
 const points = computed(() =>
   (current.value?.points ?? [])
-    .map((p) => ({ at: p.at, value: p[metric.value] }))
-    .filter((p): p is { at: string; value: number } => p.value !== null),
+    .map((p) => ({ at: p.at, value: p[metric.value], failed: !p.success }))
+    .filter((p): p is { at: string; value: number; failed: boolean } => p.value !== null),
 )
+const anyFailed = computed(() => points.value.some((p) => p.failed))
+
+// ---- lijst met sessies onder de grafiek
+const ROWS_COLLAPSED = 6
+const showAllRows = ref(false)
+
+/** Alle sessies van deze oefening, nieuwste eerst, met hun plek in de grafiek. */
+const rows = computed(() => {
+  const chartIndex = new Map(points.value.map((p, i) => [p.at, i]))
+  return [...(current.value?.points ?? [])]
+    .reverse()
+    .map((p) => ({ ...p, chartIndex: chartIndex.get(p.at) ?? -1 }))
+})
+const visibleRows = computed(() =>
+  showAllRows.value ? rows.value : rows.value.slice(0, ROWS_COLLAPSED),
+)
+
+function selectRow(chartIndex: number) {
+  if (chartIndex >= 0) selected.value = chartIndex
+}
 
 const format = (value: number) => (metric.value === 'volume' ? formatKg(value) : formatWeight(value))
 
@@ -175,7 +216,17 @@ function healthText(h: { weight: number; failStreak: number; drops: number }): s
       <!-- ============================================================ Oefeningen -->
       <template v-if="tab === 'exercises'">
         <template v-if="current">
-          <div class="scrollbar-none fade-x -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist" aria-label="Oefening">
+          <!-- Zijwaarts te schuiven met vinger, muiswiel of slepen; zonder scrollbalk. -->
+          <div
+            ref="chipRow"
+            class="scrollbar-none fade-x -mx-4 mb-3 flex scroll-px-6 gap-2 overflow-x-auto px-4 pb-1"
+            :style="{
+              '--fade-l': chips.atStart.value ? '0px' : '1.75rem',
+              '--fade-r': chips.atEnd.value ? '0px' : '1.75rem',
+            }"
+            role="tablist"
+            aria-label="Oefening"
+          >
             <button
               v-for="s in series"
               :key="s.name"
@@ -188,7 +239,8 @@ function healthText(h: { weight: number; failStreak: number; drops: number }): s
                   ? 'border-volt-500 bg-volt-500 text-ink-900'
                   : 'border-ink-600 text-ink-400 hover:text-ink-100'
               "
-              @click="picked = s.name"
+              @click="pickExercise(s.name, $event)"
+              @focus="reveal($event)"
             >
               {{ s.name }}
             </button>
@@ -224,6 +276,7 @@ function healthText(h: { weight: number; failStreak: number; drops: number }): s
                 v-model:selected="selected"
                 class="mt-2"
                 :values="points.map((p) => p.value)"
+                :hollow="points.map((p) => p.failed)"
                 :format="format"
                 :label="`${current.name}, ${metricInfo.label.toLowerCase()}: van ${stats.first} naar ${format(points[points.length - 1].value)} in ${points.length} sessies`"
               />
@@ -236,7 +289,15 @@ function healthText(h: { weight: number; failStreak: number; drops: number }): s
             </template>
             <p v-else class="mt-4 text-sm text-ink-400">Nog geen gehaalde reps voor deze oefening.</p>
 
-            <p class="mt-3 text-xs leading-relaxed text-ink-400">{{ metricInfo.hint }}</p>
+            <p v-if="anyFailed" class="mt-3 flex items-center gap-1.5 text-xs text-ink-400">
+              <svg viewBox="0 0 10 10" class="size-2.5 shrink-0" aria-hidden="true">
+                <circle cx="5" cy="5" r="3.5" class="fill-ink-800 stroke-volt-500" stroke-width="1.5" />
+              </svg>
+              Open punt: niet alle sets gehaald.
+            </p>
+            <p class="mt-2 text-xs leading-relaxed text-ink-400">
+              {{ metricInfo.hint }} Tik of sleep over de grafiek voor een andere sessie.
+            </p>
           </section>
 
           <dl v-if="stats" class="mt-3 grid grid-cols-3 gap-3 text-center">
@@ -253,6 +314,55 @@ function healthText(h: { weight: number; failStreak: number; drops: number }): s
               <dd class="tabular mt-1 font-display font-semibold">{{ stats.diff }}</dd>
             </div>
           </dl>
+
+          <!-- Alle waarden op een rij: de grafiek in cijfers -->
+          <section v-if="rows.length" class="card mt-3 p-4">
+            <h3 class="text-xs font-semibold tracking-wide text-ink-400 uppercase">Sessies</h3>
+            <table class="tabular mt-2 w-full text-sm">
+              <thead>
+                <tr class="text-xs text-ink-400">
+                  <th class="pb-1 pl-2 text-left font-normal">Datum</th>
+                  <th class="pb-1 text-right font-normal">Gewicht</th>
+                  <th class="pb-1 text-right font-normal">Reps</th>
+                  <th class="pr-2 pb-1 text-right font-normal">1RM</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="row in visibleRows"
+                  :key="row.at"
+                  class="cursor-pointer border-t border-ink-600/60 transition-colors hover:bg-ink-700/60"
+                  :class="row.chartIndex === selected && 'bg-ink-700'"
+                  @click="selectRow(row.chartIndex)"
+                >
+                  <td class="py-2 pl-2">
+                    <button
+                      type="button"
+                      class="text-left outline-none focus-visible:underline"
+                      :aria-label="`Toon ${formatShortDate(row.at)} in de grafiek`"
+                    >
+                      {{ formatShortDate(row.at) }}
+                    </button>
+                  </td>
+                  <td class="py-2 text-right font-semibold">{{ formatWeight(row.weight) }}</td>
+                  <td class="py-2 text-right" :class="!row.success && 'text-ink-400'">
+                    {{ formatReps(row.reps, row.targetReps) }}
+                  </td>
+                  <td class="py-2 pr-2 text-right text-ink-400">
+                    {{ row.e1rm === null ? '–' : formatWeight(row.e1rm) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <button
+              v-if="rows.length > ROWS_COLLAPSED"
+              type="button"
+              class="mt-3 w-full text-center text-xs text-ink-400 underline-offset-2 hover:text-ink-100 hover:underline"
+              @click="showAllRows = !showAllRows"
+            >
+              {{ showAllRows ? 'Toon minder' : `Toon alle ${rows.length} sessies` }}
+            </button>
+          </section>
 
           <section v-if="currentRecord" class="card mt-3 p-4">
             <h3 class="text-xs font-semibold tracking-wide text-ink-400 uppercase">Records</h3>

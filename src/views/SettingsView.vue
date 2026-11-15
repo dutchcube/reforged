@@ -17,6 +17,8 @@ const history = useHistoryStore()
 const session = useSessionStore()
 
 const deloadPercent = Math.round((1 - DELOAD_FACTOR) * 100)
+const appVersion = __APP_VERSION__
+const appCommit = __APP_COMMIT__
 const canVibrate = typeof navigator !== 'undefined' && 'vibrate' in navigator
 const canKeepAwake = typeof navigator !== 'undefined' && 'wakeLock' in navigator
 
@@ -202,5 +204,9 @@ function signOut() {
       <p class="truncate text-sm">{{ auth.user?.email }}</p>
       <button type="button" class="btn-ghost w-full" @click="signOut">Uitloggen</button>
     </section>
+
+    <p class="tabular mt-6 text-center text-xs text-ink-400">
+      Reforged versie {{ appVersion }} · {{ appCommit }}
+    </p>
   </main>
 </template>

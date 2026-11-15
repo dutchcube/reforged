@@ -12,6 +12,9 @@ export interface ProgressPoint {
   volume: number
   /** Alle sets gehaald. */
   success: boolean
+  /** Gehaalde reps per set en het doel, voor de lijst met sessies. */
+  reps: number[]
+  targetReps: number
 }
 
 export interface ExerciseSeries {
@@ -38,6 +41,8 @@ export function buildSeries(sessions: Session[]): ExerciseSeries[] {
         e1rm: bestE1RM(weight, reps),
         volume: exerciseVolume(weight, reps),
         success: isSuccess(reps, ex.target_reps),
+        reps,
+        targetReps: ex.target_reps,
       })
       byName.set(ex.exercise_name, points)
     }
@@ -58,6 +63,32 @@ export function buildSeries(sessions: Session[]): ExerciseSeries[] {
       (a, b) =>
         b.points.length - a.points.length || range(b) - range(a) || a.name.localeCompare(b.name),
     )
+}
+
+/** Rondt een stapgrootte af naar een "mooi" getal: 1, 2, 2,5 of 5 maal een macht van tien. */
+function niceStep(raw: number): number {
+  const pow = 10 ** Math.floor(Math.log10(raw))
+  const f = raw / pow
+  const nice = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10
+  return nice * pow
+}
+
+/**
+ * Waarden voor de y-as: ronde getallen die het bereik min–max omsluiten,
+ * ongeveer `target` stuks. Een vlakke reeks krijgt een streep erboven en eronder.
+ */
+export function niceTicks(min: number, max: number, target = 4): number[] {
+  const clean = (n: number) => Number(n.toFixed(6))
+  if (min === max) {
+    const pad = niceStep(Math.abs(min) * 0.1 || 1)
+    return [clean(min - pad), min, clean(min + pad)]
+  }
+  const step = niceStep((max - min) / (target - 1))
+  const start = Math.floor(clean(min / step)) * step
+  const end = Math.ceil(clean(max / step)) * step
+  const ticks: number[] = []
+  for (let v = start; v <= end + step / 2; v += step) ticks.push(clean(v))
+  return ticks
 }
 
 export interface ChartGeometry {
